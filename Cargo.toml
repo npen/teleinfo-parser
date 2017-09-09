@@ -1,8 +1,9 @@
 [package]
 name = "teleinfo-parser"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Nicolas Peninguy <nico@lostgeeks.org>"]
 description = "A small library for parsing TeleInfo frames from french EDF energy meters."
 license = 'GPL-3.0'
 
 [dependencies]
+chrono = "0.4.0"

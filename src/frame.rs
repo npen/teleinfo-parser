@@ -84,7 +84,7 @@ impl Frame {
 
     pub fn next_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
 
-        try!(skip_to(&mut input, STX));
+        skip_to(&mut input, STX)?;
 
         return read_frame(&mut input);
     }
@@ -118,7 +118,7 @@ fn read_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
     let mut frame = Frame::new();
 
     loop {
-        let c = try!(read_char(&mut input));
+        let c = read_char(&mut input)?;
 
         if c == ETX {
             return Ok(frame);
@@ -128,9 +128,9 @@ fn read_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
             return Err(TeleinfoError::FrameError(format!("Expected LF but found {}", c)));
         }
 
-        let lbl = try!(read_to_sep(&mut input));
-        let val = try!(read_to_sep(&mut input));
-        let checksum = try!(read_char(&mut input));
+        let lbl = read_to_sep(&mut input)?;
+        let val = read_to_sep(&mut input)?;
+        let checksum = read_char(&mut input)?;
 
         let mut sum = 0u8;
 
@@ -153,12 +153,12 @@ fn read_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
             return Err(TeleinfoError::ChecksumError);
         }
 
-        let tag = try!(parse_tag(&lbl, &val));
+        let tag = parse_tag(&lbl, &val)?;
 
         frame.tags.push(tag);
 
 
-        try!(expect_char(&mut input, CR));
+        expect_char(&mut input, CR)?;
     }
 }
 
@@ -178,26 +178,26 @@ fn parse_tag(lbl: &str, val: &str) -> Result<Tag, TeleinfoError> {
         },
 
         "ISOUSC" => {
-            let p = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let p = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::ISOUSC(p)
         },
 
         "BASE" => {
-            let v = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let v = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::BASE(v)
         },
 
         "HCHC" => {
-            let v = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let v = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::HCHC(v)
         },
 
         "HCHP" => {
-            let v = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let v = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::HCHP(v)
         },
 
@@ -211,26 +211,26 @@ fn parse_tag(lbl: &str, val: &str) -> Result<Tag, TeleinfoError> {
         },
 
         "IINST" => {
-            let v = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let v = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::IINST(v)
         },
 
         "IMAX" => {
-            let v = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let v = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::IMAX(v)
         },
 
         "ADPS" => {
-            let v = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let v = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::ADPS(v)
         },
 
         "PAPP" => {
-            let v = try!(val.parse::<i32>()
-                         .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val))));
+            let v = val.parse::<i32>()
+                .map_err(|_| TeleinfoError::FrameError(format!("Number parse error on {}", val)))?;
             Tag::PAPP(v)
         },
 
@@ -253,7 +253,7 @@ fn parse_tag(lbl: &str, val: &str) -> Result<Tag, TeleinfoError> {
 fn skip_to(mut input: &mut Read, stop_char: char) -> Result<(), TeleinfoError> {
 
     loop {
-        let c = try!(read_char(&mut input));
+        let c = read_char(&mut input)?;
 
         if c == stop_char {
             break;
@@ -268,7 +268,7 @@ fn read_to_sep(mut input: &mut Read) -> Result<String, TeleinfoError> {
     let mut result: String = String::new();
 
     loop {
-        let c = try!(read_char(&mut input));
+        let c = read_char(&mut input)?;
 
         if c ==  SEPARATOR {
             break;
@@ -282,7 +282,7 @@ fn read_to_sep(mut input: &mut Read) -> Result<String, TeleinfoError> {
 
 fn expect_char(mut input: &mut Read, expected: char) -> Result<(), TeleinfoError> {
 
-    let c = try!(read_char(&mut input));
+    let c = read_char(&mut input)?;
 
     if c != expected {
         return Err(TeleinfoError::FrameError(format!("Expected {} but found {}", expected, c)));
@@ -294,7 +294,7 @@ fn expect_char(mut input: &mut Read, expected: char) -> Result<(), TeleinfoError
 fn read_char(input: &mut Read) -> Result<char, TeleinfoError> {
 
     let mut buf = [0u8; 1];
-    let count = try!(input.read(&mut buf));
+    let count = input.read(&mut buf)?;
 
     if count == 0 {
         return Err(TeleinfoError::EndOfFile);

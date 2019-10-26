@@ -1,7 +1,6 @@
 
 use ::std::io::{self, Read};
 
-
 const STX: char = '\u{0002}';
 const ETX: char = '\u{0003}';
 const EOT: char = '\u{0004}';
@@ -71,6 +70,7 @@ pub enum Tag {
 }
 
 /// A parsed and valid frame received from the TeleInfo line.
+#[derive(Debug)]
 pub struct Frame {
     pub tags: Vec<Tag>
 }
@@ -82,7 +82,7 @@ impl Frame {
         }
     }
 
-    pub fn next_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
+    pub fn next_frame<T: Read>(mut input: &mut T) -> Result<Frame, TeleinfoError> {
 
         skip_to(&mut input, STX)?;
 
@@ -113,7 +113,7 @@ impl From<io::Error> for TeleinfoError {
     }
 }
 
-fn read_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
+fn read_frame<T: Read>(mut input: &mut T) -> Result<Frame, TeleinfoError> {
 
     let mut frame = Frame::new();
 
@@ -130,26 +130,9 @@ fn read_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
 
         let lbl = read_to_sep(&mut input)?;
         let val = read_to_sep(&mut input)?;
-        let checksum = read_char(&mut input)?;
+        let c = read_char(&mut input)?;
 
-        let mut sum = 0u8;
-
-        for c in lbl.chars() {
-            sum = sum.wrapping_add(c as u8);
-        }
-
-        sum = sum.wrapping_add(SEPARATOR as u8);
-
-        for c in val.chars() {
-            sum = sum.wrapping_add(c as u8);
-        }
-
-        // TODO: mode de calcul 2, rajouter le séparateur après valeur
-        // sum = sum.wrapping_add(SEPARATOR as u8);
-
-        let sum = ((sum & 0x3F) + 0x20) as char;
-
-        if sum != checksum {
+        if c != checksum(&lbl, &val) {
             return Err(TeleinfoError::ChecksumError);
         }
 
@@ -157,9 +140,25 @@ fn read_frame(mut input: &mut Read) -> Result<Frame, TeleinfoError> {
 
         frame.tags.push(tag);
 
-
         expect_char(&mut input, CR)?;
     }
+}
+
+fn checksum(lbl: &str, val: &str) -> char {
+
+    let mut sum = 0u8;
+
+    for c in lbl.chars() {
+        sum = sum.wrapping_add(c as u8);
+    }
+
+    sum = sum.wrapping_add(SEPARATOR as u8);
+
+    for c in val.chars() {
+        sum = sum.wrapping_add(c as u8);
+    }
+
+    ((sum & 0x3F) + 0x20) as char
 }
 
 fn parse_tag(lbl: &str, val: &str) -> Result<Tag, TeleinfoError> {
@@ -250,7 +249,7 @@ fn parse_tag(lbl: &str, val: &str) -> Result<Tag, TeleinfoError> {
     Ok(tag)
 }
 
-fn skip_to(mut input: &mut Read, stop_char: char) -> Result<(), TeleinfoError> {
+fn skip_to<T: Read>(mut input: &mut T, stop_char: char) -> Result<(), TeleinfoError> {
 
     loop {
         let c = read_char(&mut input)?;
@@ -263,7 +262,7 @@ fn skip_to(mut input: &mut Read, stop_char: char) -> Result<(), TeleinfoError> {
     Ok(())
 }
 
-fn read_to_sep(mut input: &mut Read) -> Result<String, TeleinfoError> {
+fn read_to_sep<T: Read>(mut input: &mut T) -> Result<String, TeleinfoError> {
 
     let mut result: String = String::new();
 
@@ -280,7 +279,7 @@ fn read_to_sep(mut input: &mut Read) -> Result<String, TeleinfoError> {
     Ok(result)
 }
 
-fn expect_char(mut input: &mut Read, expected: char) -> Result<(), TeleinfoError> {
+fn expect_char<T: Read>(mut input: &mut T, expected: char) -> Result<(), TeleinfoError> {
 
     let c = read_char(&mut input)?;
 
@@ -291,7 +290,7 @@ fn expect_char(mut input: &mut Read, expected: char) -> Result<(), TeleinfoError
     Ok(())
 }
 
-fn read_char(input: &mut Read) -> Result<char, TeleinfoError> {
+fn read_char<T: Read>(input: &mut T) -> Result<char, TeleinfoError> {
 
     let mut buf = [0u8; 1];
     let count = input.read(&mut buf)?;
@@ -307,4 +306,109 @@ fn read_char(input: &mut Read) -> Result<char, TeleinfoError> {
     }
 
     return Ok(c);
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use std::path::PathBuf;
+    use std::fs::File;
+
+    #[test]
+    fn test_read_char() {
+
+        let mut v = &[b'x', 4] as &[u8];
+
+        let c = read_char(&mut v);
+        assert_matches!(c, Ok('x'));
+
+        let c = read_char(&mut v);
+        assert_matches!(c, Err(TeleinfoError::EndOfTransmission));
+
+        let c = read_char(&mut v);
+        assert_matches!(c, Err(TeleinfoError::EndOfFile));
+    }
+
+    #[test]
+    fn test_expect_char() {
+
+        let mut v = &[b'a', b'b'] as &[u8];
+
+        let r = expect_char(&mut v, 'a');
+        assert_matches!(r, Ok(()));
+
+        let r = expect_char(&mut v, 'a');
+        assert_matches!(r, Err(TeleinfoError::FrameError(_)));
+    }
+
+    #[test]
+    fn test_read_to_sep() {
+        let mut v = &[b'a', b'b', b'c', SEPARATOR as u8, b'd'] as &[u8];
+
+        let r = read_to_sep(&mut v);
+        assert_eq!(r.unwrap(), "abc");
+
+        let r = read_to_sep(&mut v);
+        assert_matches!(r, Err(TeleinfoError::EndOfFile));
+    }
+
+    #[test]
+    fn test_skip_to() {
+        let mut v = &[b'a', b'b', b'c'] as &[u8];
+
+        let r = skip_to(&mut v, 'b');
+        assert_matches!(r, Ok(()));
+
+        let c = read_char(&mut v);
+        assert_matches!(c, Ok('c'));
+    }
+
+    #[test]
+    fn test_parse_tag() {
+
+        let t = parse_tag("BASE", "99").unwrap();
+        assert_matches!(t, Tag::BASE(99));
+    }
+
+    #[test]
+    fn test_checksum() {
+
+        let s = checksum("PAPP", "00380");
+        assert_eq!(s, ',');
+    }
+
+    #[test]
+    fn test_read_frame() {
+
+        let mut file = get_test_file_reader("badchecksum.txt").unwrap();
+        let frame = Frame::next_frame(&mut file);
+
+        assert_matches!(frame, Err(TeleinfoError::ChecksumError));
+
+        let mut file = get_test_file_reader("frames.txt").unwrap();
+        let frame = Frame::next_frame(&mut file).unwrap();
+
+        assert_eq!(frame.tags.len(), 8);
+
+        for tag in frame.tags {
+            match tag {
+                Tag::PAPP(v) => {
+                    assert_eq!(v, 370);
+                },
+                _ => ()
+            };
+        }
+
+
+    }
+
+    fn get_test_file_reader(file_name: &str) -> std::io::Result<File> {
+
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("resources/test");
+        d.push(file_name);
+
+        return File::open(d);
+    }
 }

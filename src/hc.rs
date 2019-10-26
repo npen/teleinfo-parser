@@ -44,7 +44,7 @@ impl HcInfos {
     /// (e.g. wrong checksum) will be returned as is. Additionnaly, the function will
     /// ensure that all the expected fields are indeed present. If not, a FrameError will be
     /// returned.
-    pub fn read(mut input: &mut io::Read) -> Result<HcInfos, TeleinfoError> {
+    pub fn read<T: io::Read>(mut input: &mut T) -> Result<HcInfos, TeleinfoError> {
 
         let frame = Frame::next_frame(&mut input)?;
 

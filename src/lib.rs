@@ -1,6 +1,10 @@
 
 extern crate chrono;
 
+#[cfg(test)]
+#[macro_use]
+extern crate matches;
+
 /// Low level Teleinfo frame parsing.
 pub mod frame;
 
